@@ -46,7 +46,6 @@ public final class MainActivity extends Activity {
             if (lastFrame != 0) {
                 float dt = Math.min((time - lastFrame) / 1_000_000_000f, 0.033f);
                 elapsed += dt;
-                if (pressed) cubeV = -540f;
                 cubeV += 1450f * dt;
                 cubeY += cubeV * dt;
                 if (cubeY > 0) { cubeY = 0; cubeV = 0; }
@@ -61,12 +60,19 @@ public final class MainActivity extends Activity {
 
         @Override protected void onDraw(Canvas c) {
             super.onDraw(c);
-            float w = getWidth(), h = getHeight();
-            float split = h * 0.61f;
-            drawGameplay(c, w, split);
-            drawLowerScreen(c, w, h - split, split);
-            p.setColor(Color.rgb(76, 225, 255)); p.setStrokeWidth(3);
-            c.drawLine(0, split, w, split, p);
+            float scale = Math.min(getWidth()/400f, getHeight()/480f);
+            float ox = (getWidth()-400f*scale)*.5f, oy = (getHeight()-480f*scale)*.5f;
+            c.save();
+            c.translate(ox, oy);
+            c.scale(scale, scale);
+            drawGameplay(c, 400, 240);
+            c.save();
+            c.translate(40, 240);
+            drawLowerScreen(c, 320, 240, 0);
+            c.restore();
+            p.setColor(Color.rgb(76, 225, 255)); p.setStrokeWidth(2);
+            c.drawLine(0, 240, 400, 240, p);
+            c.restore();
         }
 
         private void drawGameplay(Canvas c, float w, float h) {
@@ -105,7 +111,7 @@ public final class MainActivity extends Activity {
             p.setShader(new LinearGradient(0,0,0,h,0xff10182d,0xff080d1b,Shader.TileMode.CLAMP));
             c.drawRect(0,0,w,h,p); p.setShader(null);
             text(c, "SECONDARY 3DS SCREEN", 16, 28, 11, Color.WHITE);
-            text(c, "TOUCH THE TOP SCREEN TO JUMP • HOLD TO KEEP INPUT ACTIVE", 16, 47, 8, 0xff91a9c8);
+            text(c, "TOP SCREEN: TAP / HOLD / RELEASE", 16, 47, 8, 0xff91a9c8);
             float cy = h*.43f, r = Math.min(w*.105f, h*.18f);
             String[] labels = {"ICON", "SHOP", "STATS", "SETTINGS"};
             for (int i=0;i<4;i++) {
@@ -130,13 +136,18 @@ public final class MainActivity extends Activity {
         }
 
         @Override public boolean onTouchEvent(android.view.MotionEvent e) {
-            float split = getHeight()*.61f;
-            if (e.getY() <= split) {
-                if (e.getActionMasked()==MotionEvent.ACTION_DOWN || e.getActionMasked()==MotionEvent.ACTION_MOVE) pressed=true;
+            float scale = Math.min(getWidth()/400f, getHeight()/480f);
+            float ox = (getWidth()-400f*scale)*.5f, oy = (getHeight()-480f*scale)*.5f;
+            float virtualX = (e.getX()-ox)/scale, virtualY = (e.getY()-oy)/scale;
+            if (virtualY >= 0 && virtualY < 240 && virtualX >= 0 && virtualX < 400) {
+                if (e.getActionMasked()==MotionEvent.ACTION_DOWN) {
+                    pressed = true;
+                    cubeV = -540f;
+                }
                 if (e.getActionMasked()==MotionEvent.ACTION_UP || e.getActionMasked()==MotionEvent.ACTION_CANCEL) pressed=false;
                 return true;
             }
-            if (e.getActionMasked()==MotionEvent.ACTION_DOWN || e.getActionMasked()==MotionEvent.ACTION_UP) return true;
+            if (virtualY >= 240 && virtualY < 480) return true;
             return true;
         }
     }
