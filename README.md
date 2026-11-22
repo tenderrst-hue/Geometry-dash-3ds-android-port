@@ -6,7 +6,9 @@ This repository is the Android porting workspace for [gd3ds](https://github.com/
 
 - Android app module and reproducible debug-APK workflow.
 - Portrait layout with two vertically stacked logical screens: gameplay area above, secondary 3DS-style interface below.
-- Touch-down / touch-hold / touch-release events are captured on the upper screen.
+- Touch anywhere on the upper gameplay screen to jump.
+- A large on-screen **JUMP** button is available on the lower screen; tap or hold it.
+- Touch-down, hold, move-off and release/cancel states are handled for both controls.
 - A lightweight 60 Hz presentation loop drives the current visual/input prototype.
 
 **Important:** this is a porting scaffold, not yet the original GD3DS game running on Android. The upstream game uses libctru, citro2d and citro3d; its rendering, input, audio, filesystem and platform code still need Android replacements. The current screen is a visual test harness, not the original gameplay renderer.
