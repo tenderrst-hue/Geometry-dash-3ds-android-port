@@ -28,6 +28,7 @@ public final class MainActivity extends Activity {
         private long lastFrame;
         private float elapsed, cubeY, cubeV;
         private boolean pressed;
+        private boolean jumpButtonPressed;
         private float progress = 0.18f;
         private int frames;
         private long fpsStart;
@@ -111,8 +112,8 @@ public final class MainActivity extends Activity {
             p.setShader(new LinearGradient(0,0,0,h,0xff10182d,0xff080d1b,Shader.TileMode.CLAMP));
             c.drawRect(0,0,w,h,p); p.setShader(null);
             text(c, "SECONDARY 3DS SCREEN", 16, 28, 11, Color.WHITE);
-            text(c, "TOP SCREEN: TAP / HOLD / RELEASE", 16, 47, 8, 0xff91a9c8);
-            float cy = h*.43f, r = Math.min(w*.105f, h*.18f);
+            text(c, "TOUCH JUMP BUTTON BELOW OR TAP GAMEPLAY", 16, 47, 8, 0xff91a9c8);
+            float cy = h*.34f, r = Math.min(w*.105f, h*.14f);
             String[] labels = {"ICON", "SHOP", "STATS", "SETTINGS"};
             for (int i=0;i<4;i++) {
                 float x = w*(.14f + i*.24f);
@@ -122,9 +123,19 @@ public final class MainActivity extends Activity {
                 c.drawRoundRect(x-r+5,cy-r+5,x+r-5,cy+r-5,10,10,p); p.setStyle(Paint.Style.FILL);
                 text(c,labels[i],x,cy+r+19,8,0xffd7e5ff,true);
             }
-            p.setColor(0xff34415d); c.drawRoundRect(w*.08f,h*.78f,w*.92f,h*.78f+7,6,6,p);
-            p.setColor(0xff26d5e8); c.drawRoundRect(w*.08f,h*.78f,w*.92f,h*.78f+7,6,6,p);
-            text(c, "GD3DS  •  DUAL DISPLAY LAYOUT", w/2, h*.94f, 9, 0xff8ba5c8, true);
+            // Large touch target on the lower display. Press and hold is maintained
+            // until ACTION_UP / ACTION_CANCEL, matching mobile GD input semantics.
+            float bx = w*.5f, by = h*.69f, br = Math.min(w*.22f, h*.22f);
+            p.setColor(jumpButtonPressed ? 0xff20e8f2 : 0xff176b98);
+            c.drawRoundRect(bx-br,by-br*.62f,bx+br,by+br*.62f,18,18,p);
+            p.setColor(0xffd9fbff); p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(3);
+            c.drawRoundRect(bx-br+5,by-br*.62f+5,bx+br-5,by+br*.62f-5,14,14,p);
+            p.setStyle(Paint.Style.FILL);
+            text(c, "JUMP", bx, by+6, 18, Color.WHITE, true);
+            text(c, "HOLD FOR CONTINUOUS INPUT", bx, by+br*.62f+19, 7, 0xff91a9c8, true);
+            p.setColor(0xff34415d); c.drawRoundRect(w*.08f,h*.88f,w*.92f,h*.88f+6,6,6,p);
+            p.setColor(0xff26d5e8); c.drawRoundRect(w*.08f,h*.88f,w*.92f,h*.88f+6,6,6,p);
+            text(c, "GD3DS  •  DUAL DISPLAY LAYOUT", w/2, h*.97f, 9, 0xff8ba5c8, true);
             c.restore();
         }
 
@@ -139,15 +150,43 @@ public final class MainActivity extends Activity {
             float scale = Math.min(getWidth()/400f, getHeight()/480f);
             float ox = (getWidth()-400f*scale)*.5f, oy = (getHeight()-480f*scale)*.5f;
             float virtualX = (e.getX()-ox)/scale, virtualY = (e.getY()-oy)/scale;
-            if (virtualY >= 0 && virtualY < 240 && virtualX >= 0 && virtualX < 400) {
-                if (e.getActionMasked()==MotionEvent.ACTION_DOWN) {
+            int action = e.getActionMasked();
+
+            // The upper screen remains tappable anywhere, as in Geometry Dash.
+            boolean inGameplay = virtualY >= 0 && virtualY < 240 && virtualX >= 0 && virtualX < 400;
+            // Lower screen JUMP button: global logical coordinates (button is centered).
+            boolean inJumpButton = virtualY >= 240+240*.69f-240*.22f*.62f
+                && virtualY <= 240+240*.69f+240*.22f*.62f
+                && virtualX >= 200-320*.22f && virtualX <= 200+320*.22f;
+
+            if (action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_POINTER_DOWN) {
+                if (inGameplay || inJumpButton) {
                     pressed = true;
+                    jumpButtonPressed = inJumpButton;
                     cubeV = -540f;
                 }
-                if (e.getActionMasked()==MotionEvent.ACTION_UP || e.getActionMasked()==MotionEvent.ACTION_CANCEL) pressed=false;
                 return true;
             }
-            if (virtualY >= 240 && virtualY < 480) return true;
+            if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_POINTER_UP
+                    || action == MotionEvent.ACTION_CANCEL) {
+                pressed = false;
+                jumpButtonPressed = false;
+                return true;
+            }
+            if (action == MotionEvent.ACTION_MOVE) {
+                // Keep the press active while the finger remains on either control.
+                boolean active = false;
+                for (int i=0; i<e.getPointerCount(); i++) {
+                    float x=(e.getX(i)-ox)/scale, y=(e.getY(i)-oy)/scale;
+                    boolean top=y>=0 && y<240 && x>=0 && x<400;
+                    boolean button=y>=240+240*.69f-240*.22f*.62f
+                        && y<=240+240*.69f+240*.22f*.62f
+                        && x>=200-320*.22f && x<=200+320*.22f;
+                    if (top || button) { active=true; jumpButtonPressed=button; break; }
+                }
+                pressed=active;
+                return true;
+            }
             return true;
         }
     }
