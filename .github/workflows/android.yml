@@ -1,8 +1,8 @@
-name: Android debug APK
+name: Chicken Gun Android APK
 on:
   workflow_dispatch:
   push:
-    branches: [ main ]
+    branches: [ main, chicken-gun-android ]
 permissions:
   contents: read
 jobs:
@@ -22,6 +22,6 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: gd3ds-android-debug
+          name: chicken-gun-android-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
