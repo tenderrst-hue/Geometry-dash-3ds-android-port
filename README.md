@@ -10,7 +10,7 @@ This branch repurposes the Android scaffold as a touch-friendly **Chicken Gun me
 - Create-match screen: Deathmatch / Team Fight, map selection and player count.
 - Settings screen includes the vibration toggle.
 - The original PS2 menu source lists eight maps, but marks only `Proto07` as converted/ready.
-- GitHub Actions builds a debug APK.
+- GitHub Actions builds a debug APK on this branch.
 
 **Important limitation:** the supplied PS2 archive contains menu/UI/input code and placeholder loading/game screens. It does not contain Chicken Gun gameplay, player models, weapons, maps, physics, bots or networking. This Android branch therefore ports the menu flow only; it is not yet a playable Chicken Gun game. The match screen explains this rather than pretending gameplay works.
 
