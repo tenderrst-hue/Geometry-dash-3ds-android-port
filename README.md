@@ -1,17 +1,18 @@
-# Geometry Dash 3DS — Android port (work in progress)
+# Chicken Gun Android Port — work in progress
 
-This repository is the Android porting workspace for [gd3ds](https://github.com/AleFunky/gd3ds).
+This branch repurposes the Android scaffold as a touch-friendly **Chicken Gun menu prototype**, based on the user-provided `chickengun-ps2-menu.zip` source.
 
 ## Current state
 
-- Android app module and reproducible debug-APK workflow.
-- Portrait layout with two vertically stacked logical screens: gameplay area above, secondary 3DS-style interface below.
-- Touch anywhere on the upper gameplay screen to jump.
-- A large on-screen **JUMP** button is available on the lower screen; tap or hold it.
-- Touch-down, hold, move-off and release/cancel states are handled for both controls.
-- A lightweight 60 Hz presentation loop drives the current visual/input prototype.
+- Android app renamed to Chicken Gun Android (`com.chickengun.android`).
+- Portrait touch interface based on the supplied PS2 menu flow.
+- Main menu: Play Team Battle, Shop, Servers and Settings.
+- Create-match screen: Deathmatch / Team Fight, map selection and player count.
+- Settings screen includes the vibration toggle.
+- The original PS2 menu source lists eight maps, but marks only `Proto07` as converted/ready.
+- GitHub Actions builds a debug APK.
 
-**Important:** this is a porting scaffold, not yet the original GD3DS game running on Android. The upstream game uses libctru, citro2d and citro3d; its rendering, input, audio, filesystem and platform code still need Android replacements. The current screen is a visual test harness, not the original gameplay renderer.
+**Important limitation:** the supplied PS2 archive contains menu/UI/input code and placeholder loading/game screens. It does not contain Chicken Gun gameplay, player models, weapons, maps, physics, bots or networking. This Android branch therefore ports the menu flow only; it is not yet a playable Chicken Gun game. The match screen explains this rather than pretending gameplay works.
 
 ## Build
 
@@ -21,14 +22,12 @@ Open in Android Studio or run:
 gradle assembleDebug
 ```
 
-The APK is written to `app/build/outputs/apk/debug/app-debug.apk`.
+APK output: `app/build/outputs/apk/debug/app-debug.apk`.
 
-## Porting roadmap
+## Next porting work
 
-1. Replace the prototype Canvas renderer with an Android renderer (OpenGL ES) and map the upstream sprite/texture pipeline.
-2. Port the 3DS input abstraction to Android touch and key events while preserving press/hold/release semantics.
-3. Replace libctru filesystem, timing, audio and system calls.
-4. Port the Citro2D/Citro3D drawing paths, including sprite batching, tinting, blending, particles and the two-screen UI.
-5. Bring over the game source in dependency-sized steps, then test physics and frame pacing on real devices.
-
-The upstream source and original project assets are under CC BY-SA 4.0 as described by the upstream project. Geometry Dash trademarks and RobTop-owned assets remain their respective owners' property.
+1. Add actual Chicken Gun gameplay source and licensed game assets.
+2. Replace the match placeholder with a 3D renderer and player controller.
+3. Port weapons, animation, collision, audio and map loading.
+4. Add bots or networking only when corresponding source/protocols are available.
+5. Test performance and touch controls on Android devices.
