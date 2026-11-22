@@ -1,192 +1,221 @@
-package org.gd3ds.android;
+package com.chickengun.android;
 
 import android.app.Activity;
 import android.os.Bundle;
 import android.graphics.*;
 import android.view.*;
 import android.content.Context;
-import android.graphics.drawable.Drawable;
+import android.os.Handler;
 
 /**
- * First Android presentation/input shell for the GD3DS port.
- * The two logical 3DS screens are stacked vertically. This is a UI prototype;
- * original game simulation/rendering has not yet been ported from citro2d.
+ * Android adaptation of the Chicken Gun PS2 menu prototype.
+ * The supplied PS2 source contains menu/UI code only; gameplay is not present.
  */
 public final class MainActivity extends Activity {
+    private GameView gameView;
+
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
         getWindow().getDecorView().setSystemUiVisibility(
             View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION |
             View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY | View.SYSTEM_UI_FLAG_LAYOUT_STABLE |
             View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN);
-        setContentView(new DualScreenView(this));
+        gameView = new GameView(this);
+        setContentView(gameView);
     }
 
-    static final class DualScreenView extends View implements Choreographer.FrameCallback {
+    @Override public void onBackPressed() {
+        if (gameView != null) gameView.back();
+        else super.onBackPressed();
+    }
+
+    static final class GameView extends View {
+        private static final String[] MAPS = {
+            "Proto07", "Lava", "RaceTrack1", "House",
+            "ChaloHouse", "Dungeons", "Dust2", "SmallTown"
+        };
         private final Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
-        private final Choreographer choreographer = Choreographer.getInstance();
-        private long lastFrame;
-        private float elapsed, cubeY, cubeV;
-        private boolean pressed;
-        private boolean jumpButtonPressed;
-        private float progress = 0.18f;
-        private int frames;
-        private long fpsStart;
+        private final Handler handler = new Handler();
+        private int screen = 0, selected = 1, mode = 0, map = 0, players = 6;
+        private boolean vibro = true;
+        private String notice = "";
+        private long noticeUntil;
+        private long loadingStart;
+        private float sx = 1, sy = 1, ox, oy;
 
-        DualScreenView(Context c) { super(c); setLayerType(View.LAYER_TYPE_HARDWARE, null); }
+        GameView(Context context) { super(context); setLayerType(View.LAYER_TYPE_HARDWARE, null); }
 
-        @Override protected void onAttachedToWindow() {
-            super.onAttachedToWindow();
-            choreographer.postFrameCallback(this);
-        }
-        @Override protected void onDetachedFromWindow() {
-            choreographer.removeFrameCallback(this);
-            super.onDetachedFromWindow();
-        }
-        @Override public void doFrame(long time) {
-            if (lastFrame != 0) {
-                float dt = Math.min((time - lastFrame) / 1_000_000_000f, 0.033f);
-                elapsed += dt;
-                cubeV += 1450f * dt;
-                cubeY += cubeV * dt;
-                if (cubeY > 0) { cubeY = 0; cubeV = 0; }
-                if (pressed) progress = Math.min(0.99f, progress + dt * 0.035f);
-            }
-            lastFrame = time;
-            frames++;
-            if (time - fpsStart > 1_000_000_000L) { fpsStart = time; frames = 0; }
+        void back() {
+            if (screen == 1 || screen == 2) screen = 0;
+            else if (screen == 3 || screen == 4) screen = 1;
+            else screen = 0;
             invalidate();
-            choreographer.postFrameCallback(this);
         }
 
         @Override protected void onDraw(Canvas c) {
             super.onDraw(c);
-            float scale = Math.min(getWidth()/400f, getHeight()/480f);
-            float ox = (getWidth()-400f*scale)*.5f, oy = (getHeight()-480f*scale)*.5f;
+            sx = getWidth() / 400f;
+            sy = getHeight() / 700f;
+            float scale = Math.min(sx, sy);
+            ox = (getWidth() - 400 * scale) / 2f;
+            oy = (getHeight() - 700 * scale) / 2f;
             c.save();
             c.translate(ox, oy);
             c.scale(scale, scale);
-            drawGameplay(c, 400, 240);
-            c.save();
-            c.translate(40, 240);
-            drawLowerScreen(c, 320, 240, 0);
+            background(c);
+            if (screen == 0) drawTitle(c);
+            else if (screen == 1) drawCreate(c);
+            else if (screen == 2) drawSettings(c);
+            else if (screen == 3) drawLoading(c);
+            else drawGameNotice(c);
+            if (!notice.isEmpty() && System.currentTimeMillis() < noticeUntil)
+                text(c, notice, 200, 666, 11, Color.WHITE, true);
             c.restore();
-            p.setColor(Color.rgb(76, 225, 255)); p.setStrokeWidth(2);
-            c.drawLine(0, 240, 400, 240, p);
-            c.restore();
+            if (screen == 3 && System.currentTimeMillis() - loadingStart > 1400) {
+                screen = 4;
+                invalidate();
+            } else if (screen == 3) postInvalidateDelayed(32);
         }
 
-        private void drawGameplay(Canvas c, float w, float h) {
-            c.save();
-            c.clipRect(0, 0, w, h);
-            p.setShader(new LinearGradient(0, 0, 0, h, Color.rgb(8,18,48), Color.rgb(22,12,58), Shader.TileMode.CLAMP));
-            c.drawRect(0, 0, w, h, p); p.setShader(null);
-            // Neon grid and horizon
-            p.setColor(0x3348dfff); p.setStrokeWidth(1);
-            for (int x=0; x<w; x+=36) c.drawLine(x, 0, x, h, p);
-            for (int y=18; y<h; y+=36) c.drawLine(0, y, w, y, p);
-            float ground = h * .79f;
-            p.setColor(Color.rgb(30, 225, 245)); p.setStrokeWidth(4);
-            c.drawLine(0, ground, w, ground, p);
-            // Platforms and spikes
-            p.setColor(Color.rgb(25, 115, 180));
-            c.drawRect(w*.56f, ground-26, w*.69f, ground, p);
-            p.setColor(Color.rgb(255, 80, 170));
-            Path spike = new Path(); spike.moveTo(w*.74f,ground); spike.lineTo(w*.79f,ground-42); spike.lineTo(w*.84f,ground); spike.close(); c.drawPath(spike,p);
-            // Player cube
-            float size = Math.min(w,h)*.095f, cx=w*.22f, cy=ground-size+cubeY;
-            c.save(); c.rotate((float)(elapsed*180), cx+size/2, cy+size/2);
-            p.setColor(Color.rgb(30, 235, 255)); c.drawRoundRect(cx,cy,cx+size,cy+size,5,5,p);
-            p.setColor(Color.WHITE); p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(3); c.drawRect(cx+5,cy+5,cx+size-5,cy+size-5,p); p.setStyle(Paint.Style.FILL);
-            c.restore();
-            // Progress strip
-            p.setColor(0x88555566); c.drawRoundRect(w*.08f, h*.08f, w*.92f, h*.08f+8, 8,8,p);
-            p.setColor(Color.rgb(50,235,210)); c.drawRoundRect(w*.08f,h*.08f,w*(.08f+.84f*progress),h*.08f+8,8,8,p);
-            text(c, "GAMEPLAY SCREEN", 16, 28, 11, Color.WHITE);
-            text(c, "ANDROID PORT • INPUT TEST", 16, 44, 8, 0xff8bdcff);
-            c.restore();
+        private void background(Canvas c) {
+            p.setShader(new LinearGradient(0, 0, 0, 700, 0xff111827, 0xff263449, Shader.TileMode.CLAMP));
+            c.drawRect(0, 0, 400, 700, p); p.setShader(null);
+            p.setColor(0x182fd7ff);
+            for (int y=0; y<700; y+=32) c.drawLine(0, y, 400, y, p);
+            for (int x=0; x<400; x+=32) c.drawLine(x, 0, x, 700, p);
+            p.setColor(0xfff4b942); c.drawCircle(340, 72, 22, p);
         }
 
-        private void drawLowerScreen(Canvas c, float w, float h, float top) {
-            c.save(); c.translate(0, top);
-            p.setShader(new LinearGradient(0,0,0,h,0xff10182d,0xff080d1b,Shader.TileMode.CLAMP));
-            c.drawRect(0,0,w,h,p); p.setShader(null);
-            text(c, "SECONDARY 3DS SCREEN", 16, 28, 11, Color.WHITE);
-            text(c, "TOUCH JUMP BUTTON BELOW OR TAP GAMEPLAY", 16, 47, 8, 0xff91a9c8);
-            float cy = h*.34f, r = Math.min(w*.105f, h*.14f);
-            String[] labels = {"ICON", "SHOP", "STATS", "SETTINGS"};
-            for (int i=0;i<4;i++) {
-                float x = w*(.14f + i*.24f);
-                p.setColor(i==0?0xff1bc9e8:0xff293c65);
-                c.drawRoundRect(x-r,cy-r,x+r,cy+r,14,14,p);
-                p.setColor(0xffd9f8ff); p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(2);
-                c.drawRoundRect(x-r+5,cy-r+5,x+r-5,cy+r-5,10,10,p); p.setStyle(Paint.Style.FILL);
-                text(c,labels[i],x,cy+r+19,8,0xffd7e5ff,true);
-            }
-            // Large touch target on the lower display. Press and hold is maintained
-            // until ACTION_UP / ACTION_CANCEL, matching mobile GD input semantics.
-            float bx = w*.5f, by = h*.69f, br = Math.min(w*.22f, h*.22f);
-            p.setColor(jumpButtonPressed ? 0xff20e8f2 : 0xff176b98);
-            c.drawRoundRect(bx-br,by-br*.62f,bx+br,by+br*.62f,18,18,p);
-            p.setColor(0xffd9fbff); p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(3);
-            c.drawRoundRect(bx-br+5,by-br*.62f+5,bx+br-5,by+br*.62f-5,14,14,p);
-            p.setStyle(Paint.Style.FILL);
-            text(c, "JUMP", bx, by+6, 18, Color.WHITE, true);
-            text(c, "HOLD FOR CONTINUOUS INPUT", bx, by+br*.62f+19, 7, 0xff91a9c8, true);
-            p.setColor(0xff34415d); c.drawRoundRect(w*.08f,h*.88f,w*.92f,h*.88f+6,6,6,p);
-            p.setColor(0xff26d5e8); c.drawRoundRect(w*.08f,h*.88f,w*.92f,h*.88f+6,6,6,p);
-            text(c, "GD3DS  •  DUAL DISPLAY LAYOUT", w/2, h*.97f, 9, 0xff8ba5c8, true);
-            c.restore();
+        private void header(Canvas c, String subtitle) {
+            text(c, "CHICKEN GUN", 200, 82, 31, 0xffffd45a, true);
+            text(c, subtitle, 200, 108, 10, 0xffd7e4f5, true);
+            p.setColor(0xfff4b942); c.drawRoundRect(24, 126, 376, 130, 2, 2, p);
         }
 
-        private void text(Canvas c, String s, float x, float y, float size, int color) { text(c,s,x,y,size,color,false); }
+        private void button(Canvas c, float x, float y, float w, float h, String label, boolean active) {
+            p.setShader(new LinearGradient(x, y, x, y+h,
+                active ? 0xffffd45a : 0xff385675,
+                active ? 0xffd8872d : 0xff1b3048, Shader.TileMode.CLAMP));
+            c.drawRoundRect(x, y, x+w, y+h, 13, 13, p); p.setShader(null);
+            p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(active ? 3 : 1.5f);
+            p.setColor(active ? Color.WHITE : 0xff7895b3);
+            c.drawRoundRect(x+2, y+2, x+w-2, y+h-2, 11, 11, p); p.setStyle(Paint.Style.FILL);
+            text(c, label, x+w/2, y+h/2+6, 17, active ? 0xff182333 : Color.WHITE, true);
+        }
+
+        private void panel(Canvas c, float x, float y, float w, float h) {
+            p.setColor(0xe8172638); c.drawRoundRect(x, y, x+w, y+h, 16, 16, p);
+            p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(1.5f); p.setColor(0xff66829e);
+            c.drawRoundRect(x, y, x+w, y+h, 16, 16, p); p.setStyle(Paint.Style.FILL);
+        }
+
+        private void drawTitle(Canvas c) {
+            header(c, "ANDROID MENU PORT • PS2 MENU BASE");
+            panel(c, 22, 166, 356, 430);
+            text(c, "MAIN MENU", 200, 205, 13, 0xff9fc2df, true);
+            button(c, 55, 244, 290, 66, "PLAY TEAM BATTLE", selected == 1);
+            button(c, 55, 330, 290, 58, "SHOP", selected == 0);
+            button(c, 55, 408, 290, 58, "SERVERS", selected == 2);
+            button(c, 55, 500, 290, 52, "SETTINGS", false);
+            text(c, "Tap a button to select", 200, 575, 10, 0xffb8c8d8, true);
+            text(c, "Touch controls enabled", 200, 620, 10, 0xff91a9c4, true);
+        }
+
+        private void drawCreate(Canvas c) {
+            header(c, "CREATE MATCH");
+            panel(c, 20, 154, 360, 470);
+            button(c, 34, 170, 92, 42, "BACK", false);
+            text(c, "GAME MODE", 200, 248, 13, 0xffc5d9ed, true);
+            button(c, 36, 266, 156, 54, "DEATHMATCH", mode == 0);
+            button(c, 208, 266, 156, 54, "TEAM FIGHT", mode == 1);
+            text(c, "MAP", 200, 365, 13, 0xffc5d9ed, true);
+            button(c, 36, 382, 48, 52, "<", false);
+            button(c, 92, 382, 216, 52, MAPS[map], true);
+            button(c, 316, 382, 48, 52, ">", false);
+            text(c, map == 0 ? "READY" : "NOT CONVERTED", 200, 454, 10,
+                map == 0 ? 0xff7ff0a5 : 0xffffa56a, true);
+            text(c, "PLAYERS", 200, 495, 13, 0xffc5d9ed, true);
+            button(c, 86, 510, 62, 48, "-", false);
+            text(c, String.valueOf(players), 200, 542, 22, Color.WHITE, true);
+            button(c, 252, 510, 62, 48, "+", false);
+            button(c, 74, 572, 252, 42, "CREATE MATCH", true);
+        }
+
+        private void drawSettings(Canvas c) {
+            header(c, "SETTINGS");
+            panel(c, 22, 166, 356, 420);
+            button(c, 34, 180, 92, 42, "BACK", false);
+            text(c, "VIBRATION", 86, 294, 16, Color.WHITE, false);
+            button(c, 244, 266, 112, 52, vibro ? "ON" : "OFF", true);
+            text(c, "PS2 menu option", 200, 380, 11, 0xffa8bbd0, true);
+        }
+
+        private void drawLoading(Canvas c) {
+            header(c, "LOADING MATCH");
+            panel(c, 28, 260, 344, 190);
+            text(c, "Preparing " + MAPS[map], 200, 330, 17, Color.WHITE, true);
+            float progress = Math.min(1f, (System.currentTimeMillis()-loadingStart)/1400f);
+            p.setColor(0xff30445c); c.drawRoundRect(55, 365, 345, 381, 8, 8, p);
+            p.setColor(0xffffc34f); c.drawRoundRect(55, 365, 55+290*progress, 381, 8, 8, p);
+            text(c, "This is a menu loading test", 200, 420, 10, 0xffb7c8d8, true);
+        }
+
+        private void drawGameNotice(Canvas c) {
+            header(c, "MATCH");
+            panel(c, 22, 190, 356, 330);
+            text(c, "CHICKEN GUN", 200, 270, 25, 0xffffd45a, true);
+            text(c, "Gameplay is not included", 200, 330, 15, Color.WHITE, true);
+            text(c, "in the supplied PS2 source.", 200, 355, 12, 0xffc6d4e4, true);
+            text(c, "The source currently contains", 200, 400, 11, 0xffa9bfd5, true);
+            text(c, "menu, UI and input code only.", 200, 420, 11, 0xffa9bfd5, true);
+            button(c, 70, 465, 260, 46, "BACK TO MENU", true);
+        }
+
         private void text(Canvas c, String s, float x, float y, float size, int color, boolean center) {
-            p.setColor(color); p.setTextSize(size*getResources().getDisplayMetrics().scaledDensity);
-            p.setTypeface(Typeface.create("sans-serif",Typeface.BOLD));
-            p.setTextAlign(center?Paint.Align.CENTER:Paint.Align.LEFT); c.drawText(s,x,y,p);
+            p.setShader(null); p.setColor(color); p.setTextSize(size * getResources().getDisplayMetrics().scaledDensity);
+            p.setTypeface(Typeface.create("sans-serif", Typeface.BOLD));
+            p.setTextAlign(center ? Paint.Align.CENTER : Paint.Align.LEFT);
+            c.drawText(s, x, y, p);
         }
 
-        @Override public boolean onTouchEvent(android.view.MotionEvent e) {
-            float scale = Math.min(getWidth()/400f, getHeight()/480f);
-            float ox = (getWidth()-400f*scale)*.5f, oy = (getHeight()-480f*scale)*.5f;
-            float virtualX = (e.getX()-ox)/scale, virtualY = (e.getY()-oy)/scale;
-            int action = e.getActionMasked();
+        private void toast(String s) {
+            notice = s; noticeUntil = System.currentTimeMillis() + 1800;
+            invalidate();
+        }
 
-            // The upper screen remains tappable anywhere, as in Geometry Dash.
-            boolean inGameplay = virtualY >= 0 && virtualY < 240 && virtualX >= 0 && virtualX < 400;
-            // Lower screen JUMP button: global logical coordinates (button is centered).
-            boolean inJumpButton = virtualY >= 240+240*.69f-240*.22f*.62f
-                && virtualY <= 240+240*.69f+240*.22f*.62f
-                && virtualX >= 200-320*.22f && virtualX <= 200+320*.22f;
-
-            if (action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_POINTER_DOWN) {
-                if (inGameplay || inJumpButton) {
-                    pressed = true;
-                    jumpButtonPressed = inJumpButton;
-                    cubeV = -540f;
+        @Override public boolean onTouchEvent(MotionEvent e) {
+            if (e.getActionMasked() != MotionEvent.ACTION_UP) return true;
+            float scale = Math.min(getWidth()/400f, getHeight()/700f);
+            float x = (e.getX() - (getWidth()-400*scale)/2f) / scale;
+            float y = (e.getY() - (getHeight()-700*scale)/2f) / scale;
+            if (screen == 0) {
+                if (y >= 230 && y <= 320) { screen = 1; }
+                else if (y >= 320 && y <= 395) { toast("Shop is not available yet"); }
+                else if (y >= 398 && y <= 475) { toast("Servers are not available yet"); }
+                else if (y >= 485 && y <= 565) { screen = 2; }
+            } else if (screen == 1) {
+                if (y >= 165 && y <= 220 && x < 140) screen = 0;
+                else if (y >= 260 && y <= 330) {
+                    if (x < 200) mode = 0; else mode = 1;
+                } else if (y >= 375 && y <= 440) {
+                    if (x < 90) map = Math.max(0, map-1);
+                    else if (x > 310) map = Math.min(MAPS.length-1, map+1);
+                } else if (y >= 505 && y <= 560) {
+                    if (x < 160) players = Math.max(2, players-1);
+                    else if (x > 240) players = Math.min(16, players+1);
+                } else if (y >= 565 && y <= 625) {
+                    if (map == 0) { screen = 3; loadingStart = System.currentTimeMillis(); }
+                    else toast("This map is not converted yet");
                 }
-                return true;
+            } else if (screen == 2) {
+                if (y >= 175 && y <= 230 && x < 140) screen = 0;
+                else if (y >= 250 && y <= 330) vibro = !vibro;
+            } else if (screen == 3) {
+                if (y < 220) screen = 1;
+            } else if (screen == 4) {
+                if (y >= 450 && y <= 530) screen = 0;
             }
-            if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_POINTER_UP
-                    || action == MotionEvent.ACTION_CANCEL) {
-                pressed = false;
-                jumpButtonPressed = false;
-                return true;
-            }
-            if (action == MotionEvent.ACTION_MOVE) {
-                // Keep the press active while the finger remains on either control.
-                boolean active = false;
-                for (int i=0; i<e.getPointerCount(); i++) {
-                    float x=(e.getX(i)-ox)/scale, y=(e.getY(i)-oy)/scale;
-                    boolean top=y>=0 && y<240 && x>=0 && x<400;
-                    boolean button=y>=240+240*.69f-240*.22f*.62f
-                        && y<=240+240*.69f+240*.22f*.62f
-                        && x>=200-320*.22f && x<=200+320*.22f;
-                    if (top || button) { active=true; jumpButtonPressed=button; break; }
-                }
-                pressed=active;
-                return true;
-            }
+            invalidate();
             return true;
         }
     }
