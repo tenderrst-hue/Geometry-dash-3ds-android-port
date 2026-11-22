@@ -1,11 +1,11 @@
 plugins { id 'com.android.application' }
 
 android {
-    namespace 'org.gd3ds.android'
+    namespace 'com.chickengun.android'
     compileSdk 35
 
     defaultConfig {
-        applicationId 'org.gd3ds.android'
+        applicationId 'com.chickengun.android'
         minSdk 23
         targetSdk 28
         versionCode 1
